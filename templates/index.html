@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Real-Time Sentiment Dashboard</title>
+  <!-- Include Chart.js from CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <h1>Sentiment Dashboard</h1>
+  <canvas id="sentimentChart" width="400" height="200"></canvas>
+
+  <script>
+    // Initialize the Chart.js bar chart
+    var ctx = document.getElementById('sentimentChart').getContext('2d');
+    var sentimentChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: ['Positive', 'Neutral', 'Negative'],
+        datasets: [{
+          label: 'Number of Tweets',
+          data: [0, 0, 0],
+          backgroundColor: ['green', 'gray', 'red']
+        }]
+      }
+    });
+
+    // Future: Code to update chart with real data from the backend
+  </script>
+</body>
+</html>
