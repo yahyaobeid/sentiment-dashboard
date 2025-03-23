@@ -9,8 +9,9 @@ The goal of this project is to build a lightweight web dashboard that:
 ## Components
 
 ### 1. Data Ingestion
-- **Source:** Twitter Streaming API (using Tweepy)
-- **Responsibility:** Fetch tweets based on trending topics or keywords.
+- **Source:** Instagram Graph API
+- **Responsibility:** Poll the Instagram API for recent posts (or comments) from an Instagram Business account.
+
 
 ### 2. Sentiment Analysis
 - **Library:** TensorFlow or scikit-learn
