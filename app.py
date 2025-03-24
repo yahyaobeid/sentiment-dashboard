@@ -1,7 +1,19 @@
 from flask import Flask, render_template, jsonify, request
-import instagram_client
+from utils import extract_features_from_caption
+
+import instagram_client, pickle, os
+
 
 app = Flask(__name__)
+
+model = None
+vectorizer = None
+
+if os.path.exists('rf_model.pkl') and os.path.exists('vectorizer.pkl'):
+    with open('rf_model.pkl', 'rb') as f:
+        model = pickle.load(f)
+    with open('vectorizer.pkl', 'rb') as f:
+        vectorizer = pickle.load(f)
 
 def analyze_sentiment(text):
     text_lower = text.lower()
@@ -43,6 +55,22 @@ def fetch_instagram():
         })
 
     return jsonify(results)
+
+@app.route('/predict_views', methods=['POST'])
+def predict_views():
+    if model is None or vectorizer is None:
+        return jsonify({"error": "Model not available. Please train the model first."}), 500
+    
+    data = request.get_json()
+    caption = data.get("caption", "")
+    if not caption:
+        return jsonify({"error": "No caption provideed"}), 400
+    
+    features_text = extract_features_from_caption(caption)
+    features_vectorized = vectorizer.transform([features_text])
+
+    predicted_views = model.predict(features_vectorized)[0]
+    return jsonify({"predicted_views": predicted_views})
 
 if __name__ == '__main__':
     app.run(debug=True)
