@@ -1,76 +1,75 @@
-from flask import Flask, render_template, jsonify, request
-from utils import extract_features_from_caption
-
-import instagram_client, pickle, os
-
+from flask import Flask, render_template, request, jsonify
+from instagram_client import InstagramClient
+from model import InstagramPredictor
+from utils import extract_features_from_caption, analyze_sentiment
+import os
+from datetime import datetime
+import json
 
 app = Flask(__name__)
 
-model = None
-vectorizer = None
-
-if os.path.exists('rf_model.pkl') and os.path.exists('vectorizer.pkl'):
-    with open('rf_model.pkl', 'rb') as f:
-        model = pickle.load(f)
-    with open('vectorizer.pkl', 'rb') as f:
-        vectorizer = pickle.load(f)
-
-def analyze_sentiment(text):
-    text_lower = text.lower()
-    if "good" in text_lower or "happy" in text_lower:
-        return "positive"
-    elif "bad" in text_lower or "sad" in text_lower:
-        return "negative"
-    else:
-        return "neutral"
+# Initialize Instagram client and predictor
+INSTAGRAM_ACCESS_TOKEN = os.getenv('INSTAGRAM_ACCESS_TOKEN')
+instagram_client = InstagramClient(INSTAGRAM_ACCESS_TOKEN)
+predictor = InstagramPredictor()
 
 @app.route('/')
 def index():
     return render_template('index.html')
 
 @app.route('/analyze', methods=['POST'])
-def analyze():
-    data = request.get_json()
-    tweet = data.get("tweet", "")
-    sentiment = "neutral"
-
-    return jsonify({"sentiment": sentiment})
-
-@app.route('/fetch_instagram', methods=['GET'])
-def fetch_instagram():
-    access_token = "INSTA_ACCESS_TOKEN"
-    user_id = "INSTAGRAM USER ID"
-
-    posts = instagram_client.fetch_instagram_posts(access_token, user_id, count=5)
-
-    results = []
-    for post in posts:
-        caption = post.get("caption", "")
-        sentiment = analyze_sentiment(caption)
-        results.append({
-            "id": post.get("id"),
-            "caption": caption,
-            "sentiment": sentiment,
-            "timestamp": post.get("timestamp")
-        })
-
-    return jsonify(results)
-
-@app.route('/predict_views', methods=['POST'])
-def predict_views():
-    if model is None or vectorizer is None:
-        return jsonify({"error": "Model not available. Please train the model first."}), 500
+def analyze_post():
+    data = request.json
+    caption = data.get('caption', '')
+    likes = int(data.get('likes', 0))
+    comments = int(data.get('comments', 0))
+    hour = datetime.now().hour
+    day_of_week = datetime.now().weekday()
     
-    data = request.get_json()
-    caption = data.get("caption", "")
-    if not caption:
-        return jsonify({"error": "No caption provideed"}), 400
+    # Get predictions and suggestions
+    predicted_views = predictor.predict_views(caption, likes, comments, hour, day_of_week)
+    suggested_hashtags = predictor.suggest_hashtags(caption)
+    generated_caption = predictor.generate_caption(caption[:50])
     
-    features_text = extract_features_from_caption(caption)
-    features_vectorized = vectorizer.transform([features_text])
+    # Analyze sentiment
+    sentiment_polarity, sentiment_subjectivity = analyze_sentiment(caption)
+    
+    return jsonify({
+        'predicted_views': int(predicted_views),
+        'suggested_hashtags': [tag for tag, _ in suggested_hashtags],
+        'generated_caption': generated_caption,
+        'sentiment': {
+            'polarity': sentiment_polarity,
+            'subjectivity': sentiment_subjectivity
+        }
+    })
 
-    predicted_views = model.predict(features_vectorized)[0]
-    return jsonify({"predicted_views": predicted_views})
+@app.route('/train', methods=['POST'])
+def train_model():
+    data = request.json
+    hashtags = data.get('hashtags', [])
+    limit = int(data.get('limit', 100))
+    
+    # Collect training data
+    training_data = instagram_client.collect_training_data(hashtags, limit)
+    
+    # Train the model
+    predictor.train(training_data)
+    
+    return jsonify({
+        'status': 'success',
+        'message': f'Model trained on {len(training_data)} posts'
+    })
+
+@app.route('/insights', methods=['GET'])
+def get_insights():
+    # Get user insights
+    user_id = request.args.get('user_id')
+    if not user_id:
+        return jsonify({'error': 'User ID is required'}), 400
+        
+    insights = instagram_client.get_user_insights(user_id)
+    return jsonify(insights)
 
 if __name__ == '__main__':
     app.run(debug=True)
